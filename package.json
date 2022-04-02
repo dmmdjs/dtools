@@ -1,0 +1,42 @@
+{
+  "author": {
+    "email": "dm12332131mdgaming@gmail.com",
+    "name": "Dm123321_31mD Gaming"
+  },
+  "bugs": {
+    "email": "dm12332131mdgaming@gmail.com",
+    "url": "https://github.com/dmmdjs/dtools/issues"
+  },
+  "contributors": [
+    {
+      "email": "ben@iipython.cf",
+      "name": "iiPython",
+      "url": "https://iipython.cf"
+    }
+  ],
+  "description": "Collection of miscellaneous utility classes, functions, and helpers",
+  "engines": {
+    "node": ">14"
+  },
+  "homepage": "https://github.com/dmmdjs/dtools#readme",
+  "keywords": [
+    "dmmdjs", "dmmd",
+    "dtools", "tools"
+  ],
+  "license": "MIT",
+  "main": "index.js",
+  "maintainers": [
+    {
+      "email": "ben@iipython.cf",
+      "name": "iiPython",
+      "url": "https://iipython.cf"
+    }
+  ],
+  "name": "@dmmdjs/dtools",
+  "readme": "README.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmmdjs/dtools.git"
+  },
+  "version": "0.0.1"
+}
