@@ -30,7 +30,7 @@ class Log extends Events {
      * @param {string} [options.file] File path of the log file (Default: "logs/latest.log")
      * @param {(...parameters: any) => string} [options.formatter] Formatter function (Default: Log.defaultFormatter)
      * @param {any[]} [options.formatterParameters] Formatter parameters (Default: [])
-     * @param {Infinity|number} [options.lifetime] Lifetime of the log file (Default: Infinity)
+     * @param {number} [options.lifetime] Lifetime of the log file (Default: Infinity)
      * @param {boolean} [options.recursive] Creates the log file recursively through the directory (Default: true)
      * @param {boolean} [options.truncate] Automatically truncates the log file upon opening the write stream (Default: true)
      */
@@ -47,23 +47,9 @@ class Log extends Events {
             file: "logs/latest.log",
             formatter: Log.defaultFormatter,
             formatterParameters: [],
-            lifetime: Infinity,
             recursive: true,
             truncate: false,
         }, options);
-
-        /**
-         * Inverval life cycle
-         * @type {NodeJS.Timer}
-         */
-        this.interval = setInterval(() => {
-            if(!this.exists) {
-                if(this.options.autoCreate) this.create(this.options);
-                else throw new Error("Log file does not exist");
-            }
-            if(this.stream) this.close();
-            this.open(this.options);
-        }, this.options.lifetime ?? Infinity);
 
         /**
          * Options
