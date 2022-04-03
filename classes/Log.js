@@ -53,6 +53,19 @@ class Log extends Events {
         }, options);
 
         /**
+         * Inverval life cycle
+         * @type {NodeJS.Timer}
+         */
+        this.interval = setInterval(() => {
+            if(!this.exists) {
+                if(this.options.autoCreate) this.create(this.options);
+                else throw new Error("Log file does not exist");
+            }
+            if(this.stream) this.close();
+            this.open(this.options);
+        }, this.options.lifetime ?? Infinity);
+
+        /**
          * Options
          * @type {options}
          */
