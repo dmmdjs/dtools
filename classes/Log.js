@@ -1,20 +1,87 @@
-// @ts-check
+// @ts-nocheck
 
 "use strict";
+
+// Type Definitions
+/**
+ * Log options and customizations
+ * @typedef {object} LogOptions
+ * @property {boolean} [automaticClose] Automatically closes the log file (Default: true)
+ * @property {boolean} [automaticCreate] Automatically creates the log file (Default: true)
+ * @property {boolean} [automaticOpen] Automatically opens the log file (Default: true)
+ * @property {function} [formatter] Formatter (Default: Log.defaultFormatter)
+ * @property {function} [logger] Logger (Default: Log.defaultLogger)
+ * @property {boolean} [recursive] Recursively creates the log file through the directory (Default: true)
+ */
+/**
+ * Default formatter options
+ * @typedef {object} DefaultFormatterOptions
+ * @property {Date|number} [dateTime] Date time of entry (Default: Date.now())
+ * @property {"LEFT" | "RIGHT"} [dateTimeAlignment] Date time alignment (Default: "LEFT")
+ * @property {Intl.DateTimeFormat} [dateTimeFormatter] Date time formatter (Default: Log.defaultDateTimeFormatter)
+ * @property {number} [dateTimeMinimumWidth] Minimum width of date time (Default: 25)
+ * @property {string} [dateTimePadding] Padding of date time (Default: " ")
+ * @property {number | string | (number | number[] | string | string[])[]} [dateTimeStyling] Styling of date time (Default: [ 1, 94 ])
+ * @property {string} [end] Entry terminator (Default: "\n")
+ * @property {string} [message] Message of entry (Default: "MESSAGE")
+ * @property {number | string | (number | number[] | string | string[])[]} [messageStyling] Styling of message (Default: 92)
+ * @property {string} [separator] Field separator (Default: " | ")
+ * @property {string} [title] Title of entry (Default: "TITLE")
+ * @property {"LEFT" | "RIGHT"} [titleAlignment] Title alignment (Default: "LEFT")
+ * @property {number} [titleMinimumWidth] Minimum width of title (Default: 20)
+ * @property {string} [titlePadding] Padding of title (Default: " ")
+ * @property {number | string | (number | number[] | string | string[])[]} [titleStyling] Styling of title (Default: [ 1, 93 ])
+ */
+/**
+ * Default logger options
+ * @typedef {object} DefaultLoggerOptions
+ * @property {boolean} [automaticCreate] Automatically creates the log file (Default: true)
+ * @property {boolean} [automaticOpen] Automatically opens the log file (Default: true)
+ * @property {boolean} [print] Prints entry to terminal (Default: true)
+ * @property {boolean} [printRaw] Prints raw entry to terminal (Default: false)
+ * @property {boolean} [recursive] Recursively creates the log file through the directory (Default: true) 
+ * @property {boolean} [write] Writes entry to file (Default: true)
+ * @property {boolean} [writeRaw] Writes raw entry to file (Default: true)
+ */
 
 // Imports
 const Events = require("node:events");
 const fs = require("node:fs");
 const path = require("node:path");
 
-/**
- * Log system
- * @class
- * @extends {Events}
- */
 class Log extends Events {
     /**
-     * Default date time formatter
+     * File path
+     * @type {string}
+     */
+    #file;
+
+    /**
+     * Formatter
+     * @type {function}
+     */
+    #formatter;
+
+    /**
+     * Logger
+     * @type {function}
+     */
+    #logger;
+
+    /**
+     * Log options
+     * @type {LogOptions}
+     */
+    #options;
+
+    /**
+     * Write stream
+     * @type {fs.WriteStream?}
+     */
+    #stream;
+
+    /**
+     * Date time formatter
      * @static
      * @type {Intl.DateTimeFormat}
      */
@@ -22,72 +89,38 @@ class Log extends Events {
 
     /**
      * Creates a new log file
-     * @constructor
-     * @param {object} [options] Options (Default: {})
-     * @param {boolean} [options.autoClose] Automatically closes the write stream to prevent corruption (Default: false)
-     * @param {boolean} [options.autoCreate] Automatically creates the log file if it does not exist (Default: false)
-     * @param {boolean} [options.autoOpen] Automatically opens the write stream if it is closed (Default: false)
-     * @param {string} [options.file] File path of the log file (Default: "logs/latest.log")
-     * @param {(...parameters: any) => string} [options.formatter] Formatter function (Default: Log.defaultFormatter)
-     * @param {any[]} [options.formatterParameters] Formatter parameters (Default: [])
-     * @param {number} [options.lifetime] Lifetime of the log file (Default: Infinity)
-     * @param {boolean} [options.recursive] Creates the log file recursively through the directory (Default: true)
-     * @param {boolean} [options.truncate] Automatically truncates the log file upon opening the write stream (Default: true)
+     * @param {string} file File path
+     * @param {LogOptions} [options] Options
      */
-    constructor(options = {}) {
+    constructor(file, options = {}) {
         super();
-        /**
-         * Parsed options
-         * @type {options}
-         */
-        let parsedOptions = Object.assign({
-            autoClose: false,
-            autoCreate: false,
-            autoOpen: false,
-            file: "logs/latest.log",
-            formatter: Log.defaultFormatter,
-            formatterParameters: [],
-            recursive: true,
-            truncate: false,
-        }, options);
-
-        /**
-         * Options
-         * @type {options}
-         */
-        this.options = parsedOptions;
-
-        /**
-         * Write stream of the log file
-         * @type {fs.WriteStream?}
-         */
-        this.stream = null;
+        this.file = file;
+        this.options = options;
+        this.format = this.options.formatter;
+        this.log = this.options.logger;
     };
 
     /**
-     * Closes the write stream
-     * @fires Log#beforeClose
-     * @fires Log#close
-     * @returns {this} This instance
+     * Closes the log stream
+     * @param {LogOptions} [options] Log options override
+     * @returns {this} This
      */
-    close() {
-        if(!this.stream) throw new Error("Write stream is already closed");
-        /**
-         * Emits before the write stream is closed
-         * @event Log#beforeClose
-         * @param {fs.WriteStream} stream Write stream
-         */
-        super.emit("beforeClose", this.stream);
-        this.stream.destroy();
-        this.emit("close", this.stream);
-        this.stream = null;
-        return this;
+    close(options) {
+        let override = Object.assign({}, this.options, Object(options));
+        if(override.automaticCreate) this.create(override);
+        if(!this.online) return this;
+        this.#stream.once("close", () => {
+            super.emit("close", this.#stream);
+            this.#stream = null;
+        });
+        super.emit("beforeClose");
+        this.#stream.destroy();
     };
 
     /**
-     * Reads the log file synchronously and returns its content
+     * Current content of the log file
      * @readonly
-     * @returns {string} Content of the log file
+     * @returns {string} File content
      */
     get content() {
         return fs.readFileSync(this.file).toString();
@@ -95,197 +128,240 @@ class Log extends Events {
 
     /**
      * Creates the log file
-     * @fires Log#beforeCreate
-     * @fires Log#create
-     * @param {object} [options] Options (Default: {})
-     * @param {boolean} [options.recursive] Creates the log file recursively through the directory (Default: true)
-     * @returns {this} This instance
+     * @param {LogOptions} [options] Log options override
+     * @returns {this} This
      */
-    create(options = {}) {
-        let parsedOptions = Object.assign({
-            recursive: true
-        }, this.options, options);
+    create(options) {
+        let override = Object.assign({}, this.options, Object(options));
         if(this.exists) return this;
-        super.emit("beforeCreate");
-        if(!fs.existsSync(path.dirname(this.file))) fs.mkdirSync(path.dirname(this.file), {
-            recursive: parsedOptions.recursive
-        });
-        fs.openSync(this.file, "w+");
+        let file = this.file, directory = path.dirname(file);
+        if(!fs.existsSync(directory)) fs.mkdirSync(directory, override);
+        fs.openSync(file, "w+");
         super.emit("create");
         return this;
     };
 
     /**
-     * Deletes the log file
-     * @fires Log#beforeDelete
-     * @fires Log#delete
-     * @param {object} [options] Options (Default: {})
-     * @param {boolean} [options.autoClose] Automatically closes the write stream to prevent corruption (Default: false)
-     * @returns {this} This instance
-     */
-    delete(options = {}) {
-        let parsedOptions = Object.assign({
-            autoClose: false
-        }, this.options, options);
-        if(!this.exists) throw new Error("Log file does not exist");
-        if(this.stream) {
-            if(parsedOptions.autoClose) this.close();
-            else throw new Error("Write stream is not closed");
-        };
-        super.emit("beforeDelete", parsedOptions);
-        fs.unlinkSync(this.file);
-        super.emit("delete", parsedOptions);
-        return this;
-    };
-
-    /**
-     * Formats an entry
-     * @param {object} [options] Options (Default: {})
-     * @param {Date|number} [options.dateTime] Timestamp of the entry (Default: Date.now())
-     * @param {"LEFT" | "RIGHT"} [options.dateTimeAlignment] Alignment of the timestamp (Default: "LEFT")
-     * @param {Intl.DateTimeFormat} [options.dateTimeFormatter] Date time formatter (Default: Log.defaultDateTimeFormatter)
-     * @param {number} [options.dateTimeMinimumWidth] Minimum width of the timestamp (Default: 25)
-     * @param {string} [options.dateTimePadding] Padding of the timestamp (Default: " ")
-     * @param {(number | number[] | string | string[])[]} [options.dateTimeStyling] Timestamp styling (Default: [ 94, 1 ])
-     * @param {string} [options.end] String terminator (Default: "\n")
-     * @param {string} [options.message] Message of the entry (Default: "MESSAGE")
-     * @param {(number | number[] | string | string[])[]} [options.messageStyling] Message styling (Default: [ 92 ])
-     * @param {boolean} [options.raw] Disables all styling (Default: true)
-     * @param {string} [options.separator] Separator between each field (Default: " | ")
-     * @param {(number | number[] | string | string[])[]} [options.separatorStyling] Separator styling (Default: [ 90, 1 ])
-     * @param {string} [options.title] Title of the entry (Default: "TITLE")
-     * @param {"LEFT" | "RIGHT"} [options.titleAlignment] Alignment of the title (Default: "LEFT")
-     * @param {number} [options.titleMinimumWidth] Minimum width of the title (Default: 20)
-     * @param {string} [options.titlePadding] Padding of the title (Default: " ")
-     * @param {(number | number[] | string | string[])[]} [options.titleStyling] Title styling (Default: [ 93, 1 ])
+     * Default formatter
+     * @param {DefaultFormatterOptions} [options] Formatter options override
      * @returns {string} Formatted entry
      */
-    static defaultFormatter(options) {
-        let parsedOptions = Object.assign({
+    static defaultFormatter(options = {}) {
+        if(!(this instanceof Log)) throw new TypeError("Please bind this function to an instance of the log");
+        let override = Object.assign({
             dateTime: Date.now(),
             dateTimeAlignment: "LEFT",
             dateTimeFormatter: Log.defaultDateTimeFormatter,
             dateTimeMinimumWidth: 25,
             dateTimePadding: " ",
-            dateTimeStyling: [ 94, 1 ],
+            dateTimeStyling: [ 1, 94 ],
             end: "\n",
             message: "MESSAGE",
-            messageStyling: [ 92 ],
-            raw: true,
+            messageStyling: 92,
             separator: " | ",
-            separatorStyling: [ 90, 1 ],
+            separatorStyling: [ 1, 90 ],
             title: "TITLE",
             titleAlignment: "LEFT",
             titleMinimumWidth: 20,
             titlePadding: " ",
-            titleStyling: [ 93, 1 ],
+            titleStyling: [ 1, 93 ]
         }, Object(options));
-        let parsedDateTime = parsedOptions.dateTimeFormatter.format(parsedOptions.dateTime)
-            [parsedOptions.dateTimeAlignment.toUpperCase() === "RIGHT" ? "padStart" : "padEnd"](parsedOptions.dateTimeMinimumWidth, parsedOptions.dateTimePadding);
-        let parsedTitle = parsedOptions.title
-            [parsedOptions.titleAlignment.toUpperCase() === "RIGHT" ? "padStart" : "padEnd"](parsedOptions.titleMinimumWidth, parsedOptions.titlePadding);
-        if(parsedOptions.raw) return [ parsedDateTime, parsedTitle, parsedOptions.message ].join(parsedOptions.separator) + parsedOptions.end;
+        let dateTime = override.dateTimeFormatter.format(override.dateTime)
+            [override.dateTimeAlignment === "RIGHT" ? "padStart" : "padEnd"](override.dateTimeMinimumWidth, override.dateTimePadding);
+        let title = override.title[override.titleAlignment === "RIGHT" ? "padStart" : "padEnd"](override.titleMinimumWidth, override.titlePadding);
         let [ styledDateTime, styledTitle, styledMessage, styledSeparator ] = [
-            { styles: parsedOptions.dateTimeStyling, text: parsedDateTime },
-            { styles: parsedOptions.titleStyling, text: parsedTitle },
-            { styles: parsedOptions.messageStyling, text: parsedOptions.message },
-            { styles: parsedOptions.separatorStyling, text: parsedOptions.separator }
-        ].map(v => v.styles.map(u => `\x1b[${Array.isArray(u) ? u.join(";") : u}m`).join("") + v.text + "\x1b[0m");
-        return [ styledDateTime, styledTitle, styledMessage ].join(styledSeparator) + parsedOptions.end;
+            { styling: override.dateTimeStyling, text: dateTime },
+            { styling: override.titleStyling, text: title }, 
+            { styling: override.messageStyling, text: override.message },
+            { styling: override.separatorStyling, text: override.separator }
+        ].map(v => `${
+            Array.isArray(v.styling) ?
+            v.styling.map(w => `\x1b[${Array.isArray(w) ? w.join(";") : w}m`).join("") :
+            `\x1b[${v.styling}m`
+        }${v.text}${(Array.isArray(v.styling) && !v.styling.length) ? "" : "\x1b[0m"}`);
+        return [ styledDateTime, styledTitle, styledMessage ].join(styledSeparator) + override.end;
     };
 
     /**
-     * Returns whether or not the log file exists
+     * Logs the message to the log file and terminal
+     * @param {DefaultFormatterOptions} [formatOptions]
+     * @param {DefaultLoggerOptions} [logOptions]
+     */
+    static defaultLogger(formatOptions = {}, logOptions = {}) {
+        if(!(this instanceof Log)) throw new TypeError("Please bind this function to an instance of the log");
+        let logOverride = Object.assign({
+            automaticCreate: true,
+            automaticOpen: true,
+            print: true,
+            printRaw: false,
+            recursive: true,
+            write: true,
+            writeRaw: true
+        }, Object(logOptions));
+        if(!this.online) {
+            if(logOverride.automaticOpen) this.open(logOverride);
+            else throw new Error("Write stream is currently offline");
+        };
+        let raw = Object.assign({}, formatOptions, {
+            dateTimeStyling: [],
+            messageStyling: [],
+            separatorStyling: [],
+            titleStyling: []
+        });
+        this.emit("log", formatOptions, logOptions);
+        if(logOverride.print) {
+            this.emit("logPrint", formatOptions, logOptions);
+            process.stdout.write(logOverride.printRaw ? this.format(raw) : this.format(formatOptions));
+        };
+        if(logOverride.write) {
+            this.emit("logWrite", formatOptions, logOptions);
+            this.stream.write(logOverride.writeRaw ? this.format(raw) : this.format(formatOptions))
+        };
+    };
+
+    /**
+     * Deletes the log file
+     * @param {LogOptions} [options] Log options override
+     * @returns {this} This
+     */
+    delete(options) {
+        let override = Object.assign({}, this.options, Object(options));
+        if(!this.exists) return this;
+        if(this.online) {
+            if(override.automaticClose) this.close(override);
+            else throw new Error("Cannot delete the log while the write stream is online");
+        };
+        fs.unlinkSync(this.file);
+        super.emit("delete");
+        return this;
+    };
+    
+    /**
+     * Whether or not the file exists in the directory
      * @readonly
-     * @returns {boolean} Whether or not the log file exists
+     * @returns {boolean} True if the file exists or false otherwise
      */
     get exists() {
         return fs.existsSync(this.file);
     };
-
+    
     /**
-     * Returns the resolved path of the log file
+     * File path
      * @readonly
-     * @returns {string} Resolved path of the log file
+     * @returns {string} File path
      */
     get file() {
-        return path.resolve(this.options.file);
+        return this.#file;
+    };
+    
+    /**
+     * Modifies the file path
+     * @param {string} file File path
+     */
+    set file(file) {
+        this.#file = path.resolve(process.cwd(), file);
     };
 
+    /**
+     * Formatter
+     * @readonly
+     * @returns {Log.defaultFormatter | function} Formatter
+     */
+    get format() {
+        return this.#formatter;
+    };
+
+    /**
+     * Modifies the formatter
+     * @param {function} formatter Formatter
+     */
+    set format(formatter) {
+        if(typeof formatter !== "function") throw new TypeError("Formatter must be a type of function");
+        this.#formatter = formatter.bind(this);
+    };
+
+    /**
+     * Logger
+     * @readonly
+     * @returns {Log.defaultLogger | function} Logger
+     */
+    get log() {
+        return this.#logger;
+    };
+
+    /**
+     * Modifies the logger
+     * @param {function} logger Logger
+     */
+    set log(logger) {
+        if(typeof logger !== "function") throw new TypeError("Logger must be a type of function");
+        this.#logger = logger.bind(this);
+    };
+    
+    /**
+     * Whether or not the log stream is online
+     * @readonly
+     * @returns {boolean} True if the log stream is active or false otherwise
+     */
+    get online() {
+        return !!this.stream && !this.stream.destroyed;
+    };
+    
     /**
      * Opens the write stream
-     * @fires Log#beforeOpen
-     * @fires Log#open
-     * @param {object} [options] Options (Default: {})
-     * @param {boolean} [options.autoCreate] Automatically creates the log file if it does not exist (Default: false)
-     * @param {boolean} [options.recursive] Creates the log file recursively through the directory (Default: true)
-     * @param {boolean} [options.truncate] Automatically truncates the log file upon opening the write stream (Default: true)
-     * @returns {this} This instance
+     * @param {LogOptions} [options] Log options override
+     * @returns {this} This
      */
     open(options = {}) {
-        let parsedOptions = Object.assign({
-            autoCreate: false,
-            truncate: true
-        }, this.options, options);
+        let override = Object.assign({}, this.options, Object(options));
         if(!this.exists) {
-            if(parsedOptions.autoCreate) this.create(parsedOptions);
-            else throw new Error("Log file does not exist");
+            if(options.automaticCreate) this.create(override);
+            else throw new Error("Cannot open the write stream if the log file does not exist");
         };
-        if(this.stream) return this;
-        super.emit("beforeOpen", parsedOptions);
-        let content = parsedOptions.truncate ? "" : this.content;
-        this.stream = fs.createWriteStream(this.file);
-        this.stream.write(content);
-        super.emit("open", parsedOptions);
+        if(this.online) return this;
+        super.emit("beforeOpen");
+        this.#stream = fs.createWriteStream(this.file);
+        this.#stream.on("ready", () => super.emit("open", this.#stream));
         return this;
     };
 
     /**
-     * Creates a readable stream of the file
-     * @param {import("node:fs/promises").CreateReadStreamOptions} [options] Options
-     * @returns {fs.ReadStream} Readable stream
+     * Log options
+     * @readonly
+     * @returns {LogOptions} Log options
      */
-    read(options) {
-        return fs.createReadStream(this.file, options);
+    get options() {
+        return Object.assign({}, this.#options);
     };
 
     /**
-     * Writes an entry to the log file
-     * @fires Log#beforeWrite
-     * @fires Log#write
-     * @param {object} options 
-     * @param {boolean} [options.autoCreate] Automatically creates the log file if it does not exist (Default: false)
-     * @param {boolean} [options.autoOpen] Automatically opens the write stream if it is closed (Default: false)
-     * @param {(...parameters: any) => string} [options.formatter] Formatter function (Default: Log.defaultFormatter)
-     * @param {any[]} [options.formatterParameters] Formatter parameters (Default: [])
-     * @param {boolean} [options.recursive] Creates the log file recursively through the directory (Default: true)
-     * @param {boolean} [options.truncate] Automatically truncates the log file upon opening the write stream (Default: true)
-     * @param {...any} [formatterParameters] Parameters for the formatter
-     * @returns {this} This instance
+     * Modifies the log options
+     * @param {LogOptions} options Log options
      */
-    write(options, ...formatterParameters) {
-        let parsedOptions = Object.assign({
-            autoCreate: false,
-            autoOpen: false,
-            formatter: Log.defaultFormatter,
-            formatterParameter: [],
-            recursive: true,
-            truncate: true
-        }, this.options, options);
-        Object.assign(parsedOptions.formatterParameters, formatterParameters);
-        if(!this.exists) {
-            if(this.options.autoCreate) this.create(parsedOptions);
-            else throw new Error("Log file does not exist");
+    set options(options) {
+        if(!options || typeof options !== "object") throw new TypeError("Invalid options");
+        let defaultOptions = [
+            { key: "automaticClose", target: Boolean, value: true },
+            { key: "automaticCreate", target: Boolean, value: true },
+            { key: "automaticOpen", target: Boolean, value: true },
+            { key: "formatter", target: Boolean, value: Log.defaultFormatter },
+            { key: "logger", target: Boolean, value: Log.defaultLogger },
+            { key: "recursive", target: Boolean, value: true },
+        ], parsedOptions = {};
+        for(let i = 0; i < defaultOptions.length; i++) {
+            let { key, target, value } = defaultOptions[i];
+            parsedOptions[key] = (key in options && options[key] instanceof target) ? options[key] : value;
         };
-        if(!this.stream) {
-            if(this.options.autoOpen) this.open(parsedOptions);
-            else throw new Error("Write stream is is not opened");
-        };
-        super.emit("beforeWrite", parsedOptions);
-        let entry = parsedOptions.formatter(...parsedOptions.formatterParameters);
-        this.stream.write(entry);
-        super.emit("write", entry, parsedOptions);
-        return this;
+        this.#options = parsedOptions;
+    };
+
+    /**
+     * Write stream of the log
+     * @readonly
+     * @returns {fs.WriteStream?} Write stream
+     */
+    get stream() {
+        return this.#stream;
     };
 };
 
