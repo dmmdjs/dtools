@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 
 "use strict";
 
@@ -96,8 +96,6 @@ class Log extends Events {
         super();
         this.file = file;
         this.options = options;
-        this.format = this.options.formatter;
-        this.log = this.options.logger;
     };
 
     /**
@@ -106,7 +104,7 @@ class Log extends Events {
      * @returns {this} This
      */
     close(options) {
-        let override = Object.assign({}, this.options, Object(options));
+        let override = Object.assign(this.options, Object(options));
         if(override.automaticCreate) this.create(override);
         if(!this.online) return this;
         this.#stream.once("close", () => {
@@ -132,7 +130,7 @@ class Log extends Events {
      * @returns {this} This
      */
     create(options) {
-        let override = Object.assign({}, this.options, Object(options));
+        let override = Object.assign(this.options, Object(options));
         if(this.exists) return this;
         let file = this.file, directory = path.dirname(file);
         if(!fs.existsSync(directory)) fs.mkdirSync(directory, override);
@@ -225,7 +223,7 @@ class Log extends Events {
      * @returns {this} This
      */
     delete(options) {
-        let override = Object.assign({}, this.options, Object(options));
+        let override = Object.assign(this.options, Object(options));
         if(!this.exists) return this;
         if(this.online) {
             if(override.automaticClose) this.close(override);
@@ -278,6 +276,7 @@ class Log extends Events {
     set format(formatter) {
         if(typeof formatter !== "function") throw new TypeError("Formatter must be a type of function");
         this.#formatter = formatter.bind(this);
+        this.#options.formatter = this.#formatter;
     };
 
     /**
@@ -296,6 +295,7 @@ class Log extends Events {
     set log(logger) {
         if(typeof logger !== "function") throw new TypeError("Logger must be a type of function");
         this.#logger = logger.bind(this);
+        this.#options.formatter = this.#logger;
     };
     
     /**
@@ -313,7 +313,7 @@ class Log extends Events {
      * @returns {this} This
      */
     open(options = {}) {
-        let override = Object.assign({}, this.options, Object(options));
+        let override = Object.assign(this.options, Object(options));
         if(!this.exists) {
             if(options.automaticCreate) this.create(override);
             else throw new Error("Cannot open the write stream if the log file does not exist");
@@ -344,8 +344,8 @@ class Log extends Events {
             { key: "automaticClose", target: Boolean, value: true },
             { key: "automaticCreate", target: Boolean, value: true },
             { key: "automaticOpen", target: Boolean, value: true },
-            { key: "formatter", target: Boolean, value: Log.defaultFormatter },
-            { key: "logger", target: Boolean, value: Log.defaultLogger },
+            { key: "formatter", target: Function, value: Log.defaultFormatter },
+            { key: "logger", target: Function, value: Log.defaultLogger },
             { key: "recursive", target: Boolean, value: true },
         ], parsedOptions = {};
         for(let i = 0; i < defaultOptions.length; i++) {
@@ -353,6 +353,8 @@ class Log extends Events {
             parsedOptions[key] = (key in options && options[key] instanceof target) ? options[key] : value;
         };
         this.#options = parsedOptions;
+        this.#formatter = this.#options.formatter;
+        this.#logger = this.#options.logger;
     };
 
     /**

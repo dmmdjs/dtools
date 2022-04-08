@@ -20,15 +20,15 @@ npm install @dmmdjs/dtools
 const DTools = require("@dmmdjs/dtools");
 
 // Log
-let log = new DTools.Log().create().open();
-log.write({}, {
+let log = new DTools.Log("logs/latest.log");
+log.log({
     message: "Hello, world!"
 });
 ```
 
 ---
 
-##### Last Updated: April 2, 2022 3:26 PM
+##### Last Updated: April 8, 2022 3:26 PM
 ##### By Dm123321_31mD Gaming
 
 [ ↑ Go Up ](#dmmdjs--dtools)
